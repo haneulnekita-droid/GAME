@@ -1,0 +1,6 @@
+{
+  "name": "STRESS OFF: ¡DESBLOQUEA TU BIENESTAR!",
+  "description": "Videojuego educativo interactivo para jóvenes universitarios sobre gestión del estrés: organización del tiempo, respiración consciente, mindfulness y movimiento corporal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
