@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
 import { AnimatePresence, motion } from 'motion/react';
+import { auth, googleProvider } from './firebase';
 import { LEVELS } from './data/gameContent';
 import {
   ActiveGameState,
@@ -9,6 +11,14 @@ import {
   PlayerSessionRecord,
 } from './types/game';
 import { arcadeSound } from './utils/sound';
+import {
+  deleteGameSessionFromFirestore,
+  detectDeviceType,
+  getLocalDayString,
+  isUserAdmin,
+  saveGameSessionToFirestore,
+  subscribeGameSessions,
+} from './utils/firestoreRecords';
 import { ArcadeBackground } from './components/ArcadeBackground';
 import { TopHud } from './components/TopHud';
 import { StartScreen } from './components/StartScreen';
@@ -57,8 +67,20 @@ function saveLocalRecords(records: PlayerSessionRecord[]) {
   try {
     localStorage.setItem(SAVED_RECORDS_KEY, JSON.stringify(records));
   } catch {
-    // Ignore quota errors cleanly
+    // Ignore storage quota errors
   }
+}
+
+function mergeRecordLists(
+  cloudRecords: PlayerSessionRecord[],
+  localRecords: PlayerSessionRecord[]
+): PlayerSessionRecord[] {
+  const map = new Map<string, PlayerSessionRecord>();
+  localRecords.forEach((r) => map.set(r.id, r));
+  cloudRecords.forEach((r) => map.set(r.id, { ...r, syncedToCloud: true }));
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime()
+  );
 }
 
 export default function App() {
@@ -81,12 +103,26 @@ export default function App() {
     return createInitialGameState();
   });
 
-  const [records, setRecords] = useState<PlayerSessionRecord[]>(() => loadLocalRecords());
-  const [storageMode, setStorageMode] = useState<'server' | 'local'>('local');
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authBannerError, setAuthBannerError] = useState('');
+
+  const [cloudRecords, setCloudRecords] = useState<PlayerSessionRecord[]>([]);
+  const [localRecords, setLocalRecords] = useState<PlayerSessionRecord[]>(() =>
+    loadLocalRecords()
+  );
   const [isMuted, setIsMuted] = useState(false);
   const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const [isRefreshingRecords, setIsRefreshingRecords] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+
+  const isAdmin = useMemo(() => isUserAdmin(authUser), [authUser]);
+
+  // Combine cloud records with any unsynced local records
+  const records = useMemo(
+    () => mergeRecordLists(cloudRecords, localRecords),
+    [cloudRecords, localRecords]
+  );
 
   // Sync active in-progress session to localStorage
   useEffect(() => {
@@ -97,57 +133,112 @@ export default function App() {
     }
   }, [gameState]);
 
-  // Reusable function to sync all records from the server database and merge unsynced local items
-  const syncRecordsFromServer = useCallback(async () => {
-    setIsRefreshingRecords(true);
-    try {
-      const res = await fetch('/api/records');
-      if (!res.ok) throw new Error('Server unavailable');
-      const data = (await res.json()) as { records?: PlayerSessionRecord[] };
-      setStorageMode('server');
-
-      if (Array.isArray(data.records)) {
-        const serverMap = new Map<string, PlayerSessionRecord>();
-        data.records.forEach((r) => serverMap.set(r.id, r));
-
-        // Upload any local-only records that haven't reached the server yet
-        const localUnsynced = loadLocalRecords().filter((r) => !serverMap.has(r.id));
-        for (const localRec of localUnsynced) {
-          serverMap.set(localRec.id, localRec);
-          try {
-            await fetch('/api/records', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(localRec),
-            });
-          } catch {
-            // Will retry on next sync
-          }
-        }
-
-        const merged = Array.from(serverMap.values()).sort(
-          (a, b) => new Date(b.finishedAt).getTime() - new Date(a.finishedAt).getTime()
-        );
-        setRecords(merged);
-        saveLocalRecords(merged);
-      }
-    } catch {
-      setStorageMode('local');
-    } finally {
-      setIsRefreshingRecords(false);
-    }
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setAuthUser(user);
+      setAuthReady(true);
+    });
+    return () => unsub();
   }, []);
 
-  // Fetch on initial mount
+  // Upload any unsynced local records once the user signs in with a verified Google account
+  const flushLocalUnsyncedToCloud = useCallback(async (user: User) => {
+    if (!user.emailVerified) return;
+    const pending = loadLocalRecords().filter((r) => !r.syncedToCloud);
+    if (pending.length === 0) return;
+
+    const updatedLocal = [...loadLocalRecords()];
+    for (const item of pending) {
+      try {
+        const saved = await saveGameSessionToFirestore(item, user);
+        const idx = updatedLocal.findIndex((r) => r.id === item.id);
+        if (idx >= 0) {
+          updatedLocal[idx] = saved;
+        }
+      } catch {
+        // Keep unsynced for retry
+      }
+    }
+    saveLocalRecords(updatedLocal);
+    setLocalRecords(updatedLocal);
+  }, []);
+
+  // Attach Firestore real-time subscription ONLY when auth is ready and user is authenticated
   useEffect(() => {
-    syncRecordsFromServer();
-  }, [syncRecordsFromServer]);
+    if (!authReady || !authUser || !authUser.emailVerified) {
+      setCloudRecords([]);
+      return;
+    }
+
+    flushLocalUnsyncedToCloud(authUser);
+
+    const unsub = subscribeGameSessions(
+      authUser,
+      (items) => {
+        setCloudRecords(items);
+        setIsRefreshingRecords(false);
+      },
+      (err) => {
+        setIsRefreshingRecords(false);
+        setAuthBannerError(err.message);
+      }
+    );
+
+    return () => unsub();
+  }, [authReady, authUser, flushLocalUnsyncedToCloud]);
+
+  // Also load/merge from Express fallback if local records exist
+  useEffect(() => {
+    fetch('/api/records')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { records?: PlayerSessionRecord[] } | null) => {
+        if (data && Array.isArray(data.records) && data.records.length > 0) {
+          setLocalRecords((prev) => {
+            const merged = mergeRecordLists(prev, data.records || []);
+            saveLocalRecords(merged);
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSignInGoogle = useCallback(async () => {
+    arcadeSound.playClick();
+    setAuthBannerError('');
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        await flushLocalUnsyncedToCloud(result.user);
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'No se pudo iniciar sesión con Google.';
+      if (!message.includes('popup-closed-by-user')) {
+        setAuthBannerError('No se pudo conectar con Google. Revisa si el navegador bloqueó la ventana emergente.');
+      }
+    }
+  }, [flushLocalUnsyncedToCloud]);
+
+  const handleSignOut = useCallback(async () => {
+    arcadeSound.playClick();
+    await signOut(auth);
+  }, []);
+
+  const handleRefreshRecords = useCallback(async () => {
+    setIsRefreshingRecords(true);
+    if (authUser) {
+      await flushLocalUnsyncedToCloud(authUser);
+    }
+    setTimeout(() => setIsRefreshingRecords(false), 350);
+  }, [authUser, flushLocalUnsyncedToCloud]);
 
   const handleOpenRecords = useCallback(() => {
     arcadeSound.playClick();
     setIsRecordsOpen(true);
-    syncRecordsFromServer();
-  }, [syncRecordsFromServer]);
+    handleRefreshRecords();
+  }, [handleRefreshRecords]);
 
   const progressPercent = useMemo(() => {
     if (gameState.screen === 'GAME_OVER') return 100;
@@ -242,11 +333,16 @@ export default function App() {
     arcadeSound.playVictory();
     const finishedAt = new Date().toISOString();
     const percentage = Math.round((gameState.xp / 4) * 100);
+    const gameDate = getLocalDayString(gameState.startedAt);
+    const deviceInfo = detectDeviceType();
 
-    const completedRecord: PlayerSessionRecord = {
+    let completedRecord: PlayerSessionRecord = {
       id: gameState.runId,
       playerId: gameState.playerId,
       playerName: gameState.playerName || gameState.playerId,
+      gameDate,
+      deviceInfo,
+      syncedToCloud: false,
       startedAt: gameState.startedAt,
       finishedAt,
       xp: gameState.xp,
@@ -262,39 +358,30 @@ export default function App() {
       unlockedSkills: gameState.unlockedSkills,
     };
 
-    // Save locally immediately so zero data is ever lost
-    setRecords((prev) => {
-      const exists = prev.some((r) => r.id === completedRecord.id);
-      const updated = exists
-        ? prev.map((r) => (r.id === completedRecord.id ? completedRecord : r))
-        : [completedRecord, ...prev];
+    // Persist to Firestore permanently if signed in with verified Google account
+    if (authUser && authUser.emailVerified) {
+      try {
+        completedRecord = await saveGameSessionToFirestore(completedRecord, authUser);
+      } catch (err) {
+        setAuthBannerError(
+          err instanceof Error ? err.message : 'Error al guardar en la nube.'
+        );
+      }
+    }
+
+    // Save local backup immediately
+    setLocalRecords((prev) => {
+      const updated = [completedRecord, ...prev.filter((r) => r.id !== completedRecord.id)];
       saveLocalRecords(updated);
       return updated;
     });
 
-    // Save to Express server DB (with 1 automatic retry) and then sync full list
-    let savedToServer = false;
-    for (let attempt = 0; attempt < 2 && !savedToServer; attempt++) {
-      try {
-        const res = await fetch('/api/records', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(completedRecord),
-        });
-        if (res.ok) {
-          savedToServer = true;
-          setStorageMode('server');
-        }
-      } catch {
-        // Retry once
-      }
-    }
-
-    if (savedToServer) {
-      await syncRecordsFromServer();
-    } else {
-      setStorageMode('local');
-    }
+    // Also save to Express JSON endpoint as secondary backup
+    fetch('/api/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(completedRecord),
+    }).catch(() => {});
 
     setGameState((prev) => ({
       ...prev,
@@ -319,16 +406,20 @@ export default function App() {
   };
 
   const handleDeleteRecord = async (id: string) => {
-    setRecords((prev) => {
+    if (authUser && isAdmin) {
+      try {
+        await deleteGameSessionFromFirestore(id);
+      } catch {
+        // Handled below
+      }
+    }
+    setCloudRecords((prev) => prev.filter((r) => r.id !== id));
+    setLocalRecords((prev) => {
       const updated = prev.filter((r) => r.id !== id);
       saveLocalRecords(updated);
       return updated;
     });
-    try {
-      await fetch(`/api/records/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    } catch {
-      // Handled locally
-    }
+    fetch(`/api/records/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
   };
 
   const activeLevelDef = useMemo(() => {
@@ -339,11 +430,16 @@ export default function App() {
     return null;
   }, [gameState.screen]);
 
-  const completedSessionRecord: PlayerSessionRecord = useMemo(
-    () => ({
+  const completedSessionRecord: PlayerSessionRecord = useMemo(() => {
+    const existing = records.find((r) => r.id === gameState.runId);
+    if (existing) return existing;
+    return {
       id: gameState.runId,
       playerId: gameState.playerId,
       playerName: gameState.playerName || gameState.playerId,
+      gameDate: getLocalDayString(gameState.startedAt),
+      deviceInfo: detectDeviceType(),
+      syncedToCloud: false,
       startedAt: gameState.startedAt,
       finishedAt: gameState.finishedAt || new Date().toISOString(),
       xp: gameState.xp,
@@ -357,9 +453,8 @@ export default function App() {
         bonusRoundReflection: gameState.bossPlan.bonusRoundReflection,
       },
       unlockedSkills: gameState.unlockedSkills,
-    }),
-    [gameState]
-  );
+    };
+  }, [gameState, records]);
 
   return (
     <div className="min-h-screen bg-[#070913] text-slate-100 flex flex-col">
@@ -373,6 +468,10 @@ export default function App() {
         progressPercent={progressPercent}
         isMuted={isMuted}
         savedCount={records.length}
+        authUser={authUser}
+        isAdmin={isAdmin}
+        onSignInGoogle={handleSignInGoogle}
+        onSignOut={handleSignOut}
         onToggleMute={handleToggleMute}
         onOpenRecords={handleOpenRecords}
         onRequestReset={() => {
@@ -380,6 +479,21 @@ export default function App() {
           setIsResetModalOpen(true);
         }}
       />
+
+      {authBannerError && (
+        <div className="relative z-20 mx-auto mt-3 max-w-4xl px-4">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-950/50 px-4 py-2.5 text-xs text-amber-100">
+            <span>{authBannerError}</span>
+            <button
+              type="button"
+              onClick={() => setAuthBannerError('')}
+              className="font-bold text-amber-300 hover:text-white cursor-pointer"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="relative z-10 flex-1">
         <AnimatePresence mode="wait">
@@ -396,6 +510,9 @@ export default function App() {
                 initialPlayerName={gameState.playerName}
                 startDateIso={gameState.startedAt}
                 savedCount={records.length}
+                authUser={authUser}
+                isAdmin={isAdmin}
+                onSignInGoogle={handleSignInGoogle}
                 onStartGame={handleStartGame}
                 onOpenRecords={handleOpenRecords}
               />
@@ -428,7 +545,8 @@ export default function App() {
               <GameOverScreen
                 record={completedSessionRecord}
                 allRecords={records}
-                storageMode={storageMode}
+                authUser={authUser}
+                onSyncNowWithGoogle={handleSignInGoogle}
                 onBackToHome={handleReturnToHome}
                 onOpenRecords={handleOpenRecords}
               />
@@ -440,9 +558,11 @@ export default function App() {
       <RecordsModal
         isOpen={isRecordsOpen}
         records={records}
-        storageMode={storageMode}
+        authUser={authUser}
+        isAdmin={isAdmin}
         isRefreshing={isRefreshingRecords}
-        onRefresh={syncRecordsFromServer}
+        onSignInGoogle={handleSignInGoogle}
+        onRefresh={handleRefreshRecords}
         onClose={() => setIsRecordsOpen(false)}
         onDeleteRecord={handleDeleteRecord}
       />

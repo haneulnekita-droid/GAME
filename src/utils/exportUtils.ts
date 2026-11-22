@@ -15,6 +15,12 @@ export function formatReadableDate(isoString: string): string {
   });
 }
 
+function resolveDay(rec: PlayerSessionRecord): string {
+  if (rec.gameDate) return rec.gameDate;
+  if (rec.startedAt) return rec.startedAt.slice(0, 10);
+  return '—';
+}
+
 function buildSpreadsheetRows(records: PlayerSessionRecord[]) {
   return records.map((rec, idx) => {
     const l1 = rec.answers[1];
@@ -24,10 +30,13 @@ function buildSpreadsheetRows(records: PlayerSessionRecord[]) {
 
     return {
       'N°': idx + 1,
+      'Día de la Partida': resolveDay(rec),
       'ID del Player': rec.playerId,
       'Nombre del Participante': rec.playerName || rec.playerId,
-      'Fecha de Inicio': formatReadableDate(rec.startedAt),
-      'Fecha de Finalización': formatReadableDate(rec.finishedAt),
+      'Cuenta Google': rec.playerEmail || '—',
+      'Dispositivo': rec.deviceInfo || 'Web',
+      'Fecha y Hora Inicio': formatReadableDate(rec.startedAt),
+      'Fecha y Hora Finalización': formatReadableDate(rec.finishedAt),
       'Puntaje XP (sobre 4)': rec.xp,
       'Porcentaje de Aciertos (%)': `${rec.percentage}%`,
       'Nivel 1 - Letra': l1 ? l1.selectedOption : '—',
@@ -54,15 +63,17 @@ function buildSpreadsheetRows(records: PlayerSessionRecord[]) {
 function buildBossReflectionsRows(records: PlayerSessionRecord[]) {
   return records.map((rec, idx) => ({
     'N°': idx + 1,
+    'Día de la Partida': resolveDay(rec),
     'ID del Player': rec.playerId,
     'Nombre del Participante': rec.playerName || rec.playerId,
+    'Dispositivo': rec.deviceInfo || 'Web',
     'Puntaje XP': `${rec.xp} / ${rec.maxXp}`,
     'Power Up 01 (Estrategia 1)': rec.bossPlan.powerUp1 || '—',
     'Power Up 02 (Estrategia 2)': rec.bossPlan.powerUp2 || '—',
     'Power Up 03 (Respuesta Escrita: Plan de Aplicación)': rec.bossPlan.powerUp3Plan || '—',
     'Bonus Round (Respuesta Escrita: Herramienta Permanente y Razón)':
       rec.bossPlan.bonusRoundReflection || '—',
-    'Fecha de Finalización': formatReadableDate(rec.finishedAt),
+    'Fecha y Hora Finalización': formatReadableDate(rec.finishedAt),
   }));
 }
 
@@ -73,10 +84,13 @@ export function exportRecordsToExcel(records: PlayerSessionRecord[], filename?: 
   const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
   wsSummary['!cols'] = [
     { wch: 6 },
+    { wch: 16 },
     { wch: 18 },
     { wch: 26 },
-    { wch: 20 },
-    { wch: 20 },
+    { wch: 26 },
+    { wch: 14 },
+    { wch: 22 },
+    { wch: 22 },
     { wch: 18 },
     { wch: 22 },
     { wch: 12 },
@@ -102,14 +116,16 @@ export function exportRecordsToExcel(records: PlayerSessionRecord[], filename?: 
   const wsBoss = XLSX.utils.json_to_sheet(bossRows);
   wsBoss['!cols'] = [
     { wch: 6 },
+    { wch: 16 },
     { wch: 18 },
     { wch: 26 },
+    { wch: 14 },
     { wch: 14 },
     { wch: 28 },
     { wch: 28 },
     { wch: 58 },
     { wch: 58 },
-    { wch: 20 },
+    { wch: 22 },
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -157,7 +173,7 @@ export function exportRecordToPDF(record: PlayerSessionRecord) {
   };
 
   doc.setFillColor(15, 18, 37);
-  doc.rect(0, 0, pageWidth, 38, 'F');
+  doc.rect(0, 0, pageWidth, 40, 'F');
   doc.setTextColor(34, 211, 238);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(17);
@@ -168,12 +184,12 @@ export function exportRecordToPDF(record: PlayerSessionRecord) {
   doc.setFontSize(10);
   doc.text('Reporte Oficial de Misión Completada y Plan Personal Antiestrés', margin, 22);
   doc.text(
-    `Participante: ${record.playerName || record.playerId}  |  ID del Player: ${record.playerId}`,
+    `Participante: ${record.playerName || record.playerId}  |  ID: ${record.playerId}  |  Día: ${resolveDay(record)}`,
     margin,
-    29
+    30
   );
 
-  y = 46;
+  y = 48;
 
   doc.setDrawColor(203, 213, 225);
   doc.setFillColor(248, 250, 252);

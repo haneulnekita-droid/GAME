@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import { User } from 'firebase/auth';
 import {
+  Calendar,
   ChevronDown,
   ChevronUp,
+  Cloud,
   Database,
   FileDown,
   FileSpreadsheet,
@@ -21,8 +24,10 @@ import {
 interface RecordsModalProps {
   isOpen: boolean;
   records: PlayerSessionRecord[];
-  storageMode: 'server' | 'local';
+  authUser: User | null;
+  isAdmin: boolean;
   isRefreshing: boolean;
+  onSignInGoogle: () => void;
   onRefresh: () => void;
   onClose: () => void;
   onDeleteRecord: (id: string) => void;
@@ -31,24 +36,40 @@ interface RecordsModalProps {
 export function RecordsModal({
   isOpen,
   records,
-  storageMode,
+  authUser,
+  isAdmin,
   isRefreshing,
+  onSignInGoogle,
   onRefresh,
   onClose,
   onDeleteRecord,
 }: RecordsModalProps) {
   const [search, setSearch] = useState('');
+  const [selectedDay, setSelectedDay] = useState('ALL');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const uniqueDays = useMemo(() => {
+    const days = new Set<string>();
+    records.forEach((r) => {
+      const day = r.gameDate || (r.startedAt ? r.startedAt.slice(0, 10) : '');
+      if (day) days.add(day);
+    });
+    return Array.from(days).sort((a, b) => b.localeCompare(a));
+  }, [records]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return records;
-    return records.filter(
-      (r) =>
+    return records.filter((r) => {
+      const day = r.gameDate || (r.startedAt ? r.startedAt.slice(0, 10) : '');
+      if (selectedDay !== 'ALL' && day !== selectedDay) return false;
+      if (!q) return true;
+      return (
         r.playerId.toLowerCase().includes(q) ||
-        (r.playerName || '').toLowerCase().includes(q)
-    );
-  }, [records, search]);
+        (r.playerName || '').toLowerCase().includes(q) ||
+        (r.playerEmail || '').toLowerCase().includes(q)
+      );
+    });
+  }, [records, search, selectedDay]);
 
   if (!isOpen) return null;
 
@@ -66,12 +87,14 @@ export function RecordsModal({
             <Database className="h-5 w-5 text-violet-400" aria-hidden="true" />
             <div>
               <h2 id="records-modal-title" className="font-display text-lg font-bold text-white">
-                Base de Datos de Participantes ({records.length}) · Excel y Respuestas
+                Base de Datos Permanente ({records.length}) · Excel y Respuestas
               </h2>
               <p className="text-xs text-slate-400">
-                {storageMode === 'server'
-                  ? 'Conectado al servidor: guarda automáticamente nombre, puntaje, respuestas de los 4 niveles y textos del Boss Final.'
-                  : 'Respaldo local activo en el navegador: guarda nombre, puntaje, respuestas y textos del Boss Final.'}
+                {authUser
+                  ? isAdmin
+                    ? `Administrador (${authUser.email}): viendo todos los jugadores de todos los dispositivos y días.`
+                    : `Conectado (${authUser.email}): viendo tus partidas guardadas en la nube.`
+                  : 'Conecta tu cuenta Google para sincronizar todos los registros permanentes en la nube.'}
               </p>
             </div>
           </div>
@@ -86,20 +109,60 @@ export function RecordsModal({
           </button>
         </div>
 
+        {/* Cloud Connection Alert when signed out */}
+        {!authUser && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/30 bg-cyan-950/30 px-6 py-3 text-xs text-cyan-100">
+            <span className="inline-flex items-center gap-2">
+              <Cloud className="h-4 w-4 text-cyan-300" aria-hidden="true" />
+              Inicia sesión con Google para guardar y consultar registros permanentes entre múltiples dispositivos y fechas.
+            </span>
+            <button
+              type="button"
+              onClick={onSignInGoogle}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-cyan-400 px-3 text-xs font-bold text-slate-950 hover:bg-cyan-300 cursor-pointer"
+            >
+              <Cloud className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Conectar Google</span>
+            </button>
+          </div>
+        )}
+
         {/* Toolbar */}
         <div className="flex flex-col gap-3 border-b border-slate-800 bg-[#10152c] px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1 max-w-sm">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-              aria-hidden="true"
-            />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre o ID del Player..."
-              className="h-10 w-full rounded-lg border border-slate-700 bg-[#080b18] pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none"
-            />
+          <div className="flex flex-1 flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[210px] max-w-xs">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"
+              />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nombre, ID o correo..."
+                className="h-10 w-full rounded-lg border border-slate-700 bg-[#080b18] pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none"
+              />
+            </div>
+
+            <div className="relative flex items-center">
+              <Calendar
+                className="pointer-events-none absolute left-3 h-4 w-4 text-violet-300"
+                aria-hidden="true"
+              />
+              <select
+                aria-label="Filtrar por día de partida"
+                value={selectedDay}
+                onChange={(e) => setSelectedDay(e.target.value)}
+                className="h-10 rounded-lg border border-slate-700 bg-[#080b18] pl-9 pr-4 text-xs font-semibold text-slate-200 focus:border-cyan-400 focus:outline-none"
+              >
+                <option value="ALL">Todos los días ({records.length})</option>
+                {uniqueDays.map((day) => (
+                  <option key={day} value={day}>
+                    Día: {day}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
@@ -113,7 +176,7 @@ export function RecordsModal({
                 className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`}
                 aria-hidden="true"
               />
-              <span>Actualizar</span>
+              <span>Sincronizar</span>
             </button>
 
             <button
@@ -146,10 +209,10 @@ export function RecordsModal({
               <p className="mt-3 font-display text-base font-bold text-slate-200">
                 {records.length === 0
                   ? 'Aún no hay partidas completadas guardadas'
-                  : 'No hay resultados para esa búsqueda'}
+                  : 'No hay resultados para ese filtro'}
               </p>
               <p className="mt-1 max-w-md text-xs text-slate-400">
-                Al completar los 4 niveles y el Boss Final, cada jugador se guarda automáticamente aquí con sus respuestas escritas y su puntaje.
+                Cada partida completada guarda el día exacto, dispositivo, nombre, puntaje XP, respuestas de los 4 niveles y las reflexiones escritas del Boss Final.
               </p>
             </div>
           ) : (
@@ -157,34 +220,49 @@ export function RecordsModal({
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="border-b border-slate-800 bg-[#121731] text-xs font-semibold text-slate-300">
                   <tr>
+                    <th className="px-4 py-3">Día</th>
                     <th className="px-4 py-3">Participante</th>
                     <th className="px-4 py-3">ID del Player</th>
+                    <th className="px-4 py-3">Dispositivo</th>
                     <th className="px-4 py-3">Puntaje</th>
-                    <th className="px-4 py-3">Estrategias Boss Final</th>
-                    <th className="px-4 py-3">Fecha Finalización</th>
+                    <th className="px-4 py-3">Estado</th>
                     <th className="px-4 py-3 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80 bg-[#0b0f22]">
                   {filtered.map((rec) => {
                     const isExpanded = expandedId === rec.id;
+                    const dayStr =
+                      rec.gameDate || (rec.startedAt ? rec.startedAt.slice(0, 10) : '—');
                     return (
                       <React.Fragment key={rec.id}>
                         <tr className="hover:bg-[#111630]">
+                          <td className="px-4 py-3 font-mono-tabular text-xs text-slate-300 whitespace-nowrap">
+                            {dayStr}
+                          </td>
                           <td className="px-4 py-3 font-semibold text-white">
-                            {rec.playerName || rec.playerId}
+                            <div>{rec.playerName || rec.playerId}</div>
+                            {rec.playerEmail && (
+                              <div className="text-[11px] font-normal text-slate-400">
+                                {rec.playerEmail}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 font-mono-tabular font-bold text-cyan-300">
                             {rec.playerId}
                           </td>
+                          <td className="px-4 py-3 text-xs text-slate-300">
+                            {rec.deviceInfo || 'Web'}
+                          </td>
                           <td className="px-4 py-3 font-mono-tabular font-bold text-yellow-300 whitespace-nowrap">
                             {rec.xp} / {rec.maxXp} XP ({rec.percentage}%)
                           </td>
-                          <td className="px-4 py-3 text-xs text-slate-300 max-w-xs">
-                            {rec.bossPlan.powerUp1} + {rec.bossPlan.powerUp2}
-                          </td>
-                          <td className="px-4 py-3 font-mono-tabular text-xs text-slate-400 whitespace-nowrap">
-                            {formatReadableDate(rec.finishedAt)}
+                          <td className="px-4 py-3 text-xs whitespace-nowrap">
+                            {rec.syncedToCloud ? (
+                              <span className="font-semibold text-emerald-300">Nube ✓</span>
+                            ) : (
+                              <span className="font-semibold text-amber-300">Local</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="inline-flex items-center gap-2">
@@ -214,23 +292,33 @@ export function RecordsModal({
                                 <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
                                 <span>PDF</span>
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => onDeleteRecord(rec.id)}
-                                aria-label={`Eliminar registro de ${rec.playerName || rec.playerId}`}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-rose-500/30 bg-rose-950/30 text-rose-300 hover:bg-rose-900/50 cursor-pointer"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                              </button>
+                              {(isAdmin || !rec.syncedToCloud) && (
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteRecord(rec.id)}
+                                  aria-label={`Eliminar registro de ${rec.playerName || rec.playerId}`}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-rose-500/30 bg-rose-950/30 text-rose-300 hover:bg-rose-900/50 cursor-pointer"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
 
                         {isExpanded && (
                           <tr className="bg-[#0e132b]">
-                            <td colSpan={6} className="p-5">
+                            <td colSpan={7} className="p-5">
+                              <div className="mb-3 flex flex-wrap gap-4 text-xs text-slate-400">
+                                <span>Inicio: {formatReadableDate(rec.startedAt)}</span>
+                                <span>·</span>
+                                <span>Fin: {formatReadableDate(rec.finishedAt)}</span>
+                                <span>·</span>
+                                <span>
+                                  Estrategias: {rec.bossPlan.powerUp1} + {rec.bossPlan.powerUp2}
+                                </span>
+                              </div>
                               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                                {/* Level 1-4 Choices */}
                                 <div className="space-y-2 rounded-xl border border-slate-800 bg-[#090d1e] p-4">
                                   <p className="text-xs font-bold tracking-wider text-cyan-300">
                                     RESPUESTAS NIVELES 1 AL 4
@@ -250,7 +338,6 @@ export function RecordsModal({
                                   })}
                                 </div>
 
-                                {/* Final Boss Written Reflections */}
                                 <div className="space-y-2.5 rounded-xl border border-fuchsia-500/30 bg-[#12102b] p-4">
                                   <p className="text-xs font-bold tracking-wider text-fuchsia-300">
                                     RESPUESTAS ESCRITAS DEL FINAL BOSS

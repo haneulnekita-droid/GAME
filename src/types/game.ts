@@ -71,6 +71,11 @@ export interface PlayerSessionRecord {
   id: string;
   playerId: string;
   playerName?: string;
+  ownerUid?: string;
+  playerEmail?: string;
+  gameDate?: string;
+  deviceInfo?: string;
+  syncedToCloud?: boolean;
   startedAt: string;
   finishedAt: string;
   xp: number;

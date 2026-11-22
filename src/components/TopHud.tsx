@@ -1,4 +1,14 @@
-import { Database, Gamepad2, RotateCcw, Star, Volume2, VolumeX } from 'lucide-react';
+import { User } from 'firebase/auth';
+import {
+  Cloud,
+  Database,
+  Gamepad2,
+  LogOut,
+  RotateCcw,
+  Star,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { LEVELS } from '../data/gameContent';
 import { GameScreen } from '../types/game';
 
@@ -10,6 +20,10 @@ interface TopHudProps {
   progressPercent: number;
   isMuted: boolean;
   savedCount: number;
+  authUser: User | null;
+  isAdmin: boolean;
+  onSignInGoogle: () => void;
+  onSignOut: () => void;
   onToggleMute: () => void;
   onOpenRecords: () => void;
   onRequestReset: () => void;
@@ -23,6 +37,10 @@ export function TopHud({
   progressPercent,
   isMuted,
   savedCount,
+  authUser,
+  isAdmin,
+  onSignInGoogle,
+  onSignOut,
   onToggleMute,
   onOpenRecords,
   onRequestReset,
@@ -43,7 +61,6 @@ export function TopHud({
         {/* Zone 2: Arcade Player HUD (when playing) */}
         {isPlaying ? (
           <div className="hidden md:flex flex-1 max-w-2xl items-center gap-5">
-            {/* Progress & XP Crystal Meter */}
             <div className="flex-1 flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2.5">
@@ -51,7 +68,6 @@ export function TopHud({
                     {playerId || 'PLAYER 01'}
                   </span>
                   <span aria-hidden="true" className="text-slate-600">·</span>
-                  {/* 4 XP Star Slots */}
                   <div className="flex items-center gap-1" aria-label={`Puntaje ${xp} de 4 XP`}>
                     {[1, 2, 3, 4].map((slot) => {
                       const filled = slot <= xp;
@@ -92,7 +108,6 @@ export function TopHud({
               </div>
             </div>
 
-            {/* Live Skill Crest Inventory */}
             <div
               className="hidden lg:flex items-center gap-1.5 border-l border-slate-800 pl-4"
               aria-label="Inventario de habilidades desbloqueadas"
@@ -125,27 +140,51 @@ export function TopHud({
             </div>
           </div>
         ) : (
-          <div className="hidden md:flex items-center gap-4 text-sm text-slate-300">
+          <div className="hidden lg:flex items-center gap-4 text-sm text-slate-300">
             <span className="whitespace-nowrap">Aventura Interactiva de Bienestar</span>
             <span aria-hidden="true" className="text-slate-600">·</span>
-            <span className="whitespace-nowrap text-cyan-300">4 Niveles + Jefe Final</span>
+            <span className="whitespace-nowrap text-cyan-300">Guardado Permanente en la Nube</span>
           </div>
         )}
 
         {/* Zone 3: Functional Controls */}
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          {authUser ? (
+            <button
+              type="button"
+              onClick={onSignOut}
+              title={`Conectado: ${authUser.email || ''} (clic para salir)`}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950/35 px-3 text-xs font-semibold text-emerald-200 transition-colors hover:border-emerald-400 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Cloud className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+              <span className="hidden sm:inline max-w-[110px] truncate">
+                {isAdmin ? 'Admin' : authUser.displayName?.split(' ')[0] || 'Conectado'}
+              </span>
+              <LogOut className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onSignInGoogle}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/40 px-3 text-xs font-semibold text-cyan-200 transition-colors hover:border-cyan-400 hover:bg-cyan-900/50 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Cloud className="h-4 w-4 text-cyan-300" aria-hidden="true" />
+              <span>Conectar Google</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onToggleMute}
             aria-label={isMuted ? 'Activar sonidos del juego' : 'Silenciar sonidos del juego'}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-700/80 bg-slate-900/90 px-3 text-xs font-medium text-slate-200 transition-colors hover:border-cyan-400/50 hover:text-white whitespace-nowrap shrink-0 cursor-pointer"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-700/80 bg-slate-900/90 px-2.5 text-xs font-medium text-slate-200 transition-colors hover:border-cyan-400/50 hover:text-white whitespace-nowrap shrink-0 cursor-pointer"
           >
             {isMuted ? (
               <VolumeX className="h-4 w-4 text-slate-400" aria-hidden="true" />
             ) : (
               <Volume2 className="h-4 w-4 text-cyan-400" aria-hidden="true" />
             )}
-            <span className="hidden sm:inline">{isMuted ? 'Silencio' : 'Audio'}</span>
+            <span className="hidden xl:inline">{isMuted ? 'Silencio' : 'Audio'}</span>
           </button>
 
           <button
@@ -154,7 +193,7 @@ export function TopHud({
             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-violet-500/40 bg-violet-950/50 px-3.5 text-xs font-semibold text-violet-200 transition-colors hover:border-violet-400 hover:bg-violet-900/60 whitespace-nowrap shrink-0 cursor-pointer"
           >
             <Database className="h-4 w-4 text-violet-300" aria-hidden="true" />
-            <span>Registros Excel ({savedCount})</span>
+            <span>Excel ({savedCount})</span>
           </button>
 
           {isPlaying && (

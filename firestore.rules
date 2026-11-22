@@ -1,0 +1,132 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'haneulnekita@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidOption(val) {
+      return val is string && val.size() >= 1 && val.size() <= 2 && val in ['A', 'B', 'C', 'D'];
+    }
+
+    function isValidSkillsList(skills) {
+      return skills is list &&
+        skills.size() <= 4 &&
+        (skills.size() == 0 || (skills[0] is string && skills[0].size() >= 1 && skills[0].size() <= 64));
+    }
+
+    function isValidGameSession(data, sessionId) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'playerEmail', 'playerId', 'playerName',
+          'gameDate', 'startedAt', 'finishedAt', 'createdAt',
+          'xp', 'maxXp', 'percentage', 'deviceInfo',
+          'level1Option', 'level1Text', 'level1Correct',
+          'level2Option', 'level2Text', 'level2Correct',
+          'level3Option', 'level3Text', 'level3Correct',
+          'level4Option', 'level4Text', 'level4Correct',
+          'bossPowerUp1', 'bossPowerUp2', 'bossPowerUp3Plan', 'bossBonusReflection',
+          'unlockedSkills'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerUid', 'playerEmail', 'playerId', 'playerName',
+          'gameDate', 'startedAt', 'finishedAt', 'createdAt',
+          'xp', 'maxXp', 'percentage', 'deviceInfo',
+          'level1Option', 'level1Text', 'level1Correct',
+          'level2Option', 'level2Text', 'level2Correct',
+          'level3Option', 'level3Text', 'level3Correct',
+          'level4Option', 'level4Text', 'level4Correct',
+          'bossPowerUp1', 'bossPowerUp2', 'bossPowerUp3Plan', 'bossBonusReflection',
+          'unlockedSkills'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == sessionId &&
+        isValidId(data.ownerUid) &&
+        data.ownerUid == request.auth.uid &&
+        data.playerEmail is string && data.playerEmail.size() >= 1 && data.playerEmail.size() <= 160 &&
+        data.playerId is string && data.playerId.size() >= 1 && data.playerId.size() <= 64 &&
+        data.playerName is string && data.playerName.size() >= 1 && data.playerName.size() <= 96 &&
+        data.gameDate is string && data.gameDate.size() >= 10 && data.gameDate.size() <= 32 &&
+        data.startedAt is string && data.startedAt.size() >= 10 && data.startedAt.size() <= 64 &&
+        data.finishedAt is string && data.finishedAt.size() >= 10 && data.finishedAt.size() <= 64 &&
+        data.createdAt == request.time &&
+        data.xp is int && data.xp >= 0 && data.xp <= 4 &&
+        data.maxXp is int && data.maxXp == 4 &&
+        data.percentage is int && data.percentage >= 0 && data.percentage <= 100 &&
+        data.deviceInfo is string && data.deviceInfo.size() >= 1 && data.deviceInfo.size() <= 120 &&
+        isValidOption(data.level1Option) &&
+        data.level1Text is string && data.level1Text.size() >= 1 && data.level1Text.size() <= 400 &&
+        data.level1Correct is bool &&
+        isValidOption(data.level2Option) &&
+        data.level2Text is string && data.level2Text.size() >= 1 && data.level2Text.size() <= 400 &&
+        data.level2Correct is bool &&
+        isValidOption(data.level3Option) &&
+        data.level3Text is string && data.level3Text.size() >= 1 && data.level3Text.size() <= 400 &&
+        data.level3Correct is bool &&
+        isValidOption(data.level4Option) &&
+        data.level4Text is string && data.level4Text.size() >= 1 && data.level4Text.size() <= 400 &&
+        data.level4Correct is bool &&
+        data.bossPowerUp1 is string && data.bossPowerUp1.size() >= 1 && data.bossPowerUp1.size() <= 120 &&
+        data.bossPowerUp2 is string && data.bossPowerUp2.size() >= 1 && data.bossPowerUp2.size() <= 120 &&
+        data.bossPowerUp3Plan is string && data.bossPowerUp3Plan.size() >= 1 && data.bossPowerUp3Plan.size() <= 4000 &&
+        data.bossBonusReflection is string && data.bossBonusReflection.size() >= 1 && data.bossBonusReflection.size() <= 4000 &&
+        isValidSkillsList(data.unlockedSkills);
+    }
+
+    match /game_sessions/{sessionId} {
+      allow get: if isVerified() && isValidId(sessionId) && (
+        isAdmin() || existing().ownerUid == request.auth.uid
+      );
+
+      allow list: if isVerified() && (
+        isAdmin() || resource.data.ownerUid == request.auth.uid
+      );
+
+      allow create: if isVerified() &&
+        isValidId(sessionId) &&
+        isValidGameSession(incoming(), sessionId);
+
+      // Completed sessions are immutable so scores and timestamps cannot be tampered with
+      allow update: if false;
+
+      allow delete: if isAdmin() && isValidId(sessionId);
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isVerified() && isValidId(adminUid) && (
+        request.auth.uid == adminUid || isAdmin()
+      );
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+  }
+}

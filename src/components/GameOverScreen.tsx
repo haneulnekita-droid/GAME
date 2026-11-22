@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { User } from 'firebase/auth';
 import confetti from 'canvas-confetti';
 import {
   CheckCircle2,
+  Cloud,
   Database,
   FileDown,
   FileSpreadsheet,
@@ -23,7 +25,8 @@ import {
 interface GameOverScreenProps {
   record: PlayerSessionRecord;
   allRecords: PlayerSessionRecord[];
-  storageMode: 'server' | 'local';
+  authUser: User | null;
+  onSyncNowWithGoogle: () => void;
   onBackToHome: () => void;
   onOpenRecords: () => void;
 }
@@ -38,7 +41,8 @@ function getArcadeRank(xp: number): { rank: string; label: string } {
 export function GameOverScreen({
   record,
   allRecords,
-  storageMode,
+  authUser,
+  onSyncNowWithGoogle,
   onBackToHome,
   onOpenRecords,
 }: GameOverScreenProps) {
@@ -64,7 +68,7 @@ export function GameOverScreen({
   }, []);
 
   const handleDownloadIndividualExcel = () => {
-    const safePlayer = record.playerId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safePlayer = (record.playerName || record.playerId).replace(/[^a-zA-Z0-9_-]/g, '_');
     exportRecordsToExcel([record], `STRESS_OFF_${safePlayer}.xlsx`);
   };
 
@@ -90,7 +94,6 @@ export function GameOverScreen({
                 {GAME_BRAND.gameOverTitle}
               </h1>
 
-              {/* Star Rating Bar */}
               <div className="mt-4 flex items-center gap-2" aria-label={`Calificación ${record.xp} de 4 estrellas`}>
                 {[1, 2, 3, 4].map((starIdx) => (
                   <Star
@@ -158,17 +161,37 @@ export function GameOverScreen({
         </div>
 
         <div className="space-y-8 p-6 sm:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-3 text-xs sm:text-sm text-emerald-100">
-            <span className="inline-flex items-center gap-2 font-medium">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
-              {storageMode === 'server'
-                ? 'Partida guardada automáticamente en el servidor y respaldo local, lista para exportar a Excel o PDF.'
-                : 'Partida guardada en el navegador, lista para exportar a Excel o PDF.'}
-            </span>
-            <span className="font-mono-tabular text-emerald-300">
-              Registros totales: {allRecords.length}
-            </span>
-          </div>
+          {/* Cloud Persistence Banner */}
+          {record.syncedToCloud ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-3 text-xs sm:text-sm text-emerald-100">
+              <span className="inline-flex items-center gap-2 font-medium">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                Guardado permanentemente en la nube (Firebase Firestore) con fecha {record.gameDate || formatReadableDate(record.finishedAt)} y respaldo local.
+              </span>
+              <span className="font-mono-tabular text-emerald-300">
+                Registros visibles: {allRecords.length}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 rounded-xl border border-amber-400/45 bg-amber-950/30 px-4 py-3.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:text-sm text-amber-100">
+              <span className="inline-flex items-center gap-2 font-medium">
+                <Cloud className="h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+                {authUser
+                  ? 'Sincronizando registro con la nube...'
+                  : 'Tu partida está guardada en este dispositivo. Conecta tu cuenta Google para guardarla permanentemente en la base de datos de la nube.'}
+              </span>
+              {!authUser && (
+                <button
+                  type="button"
+                  onClick={onSyncNowWithGoogle}
+                  className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-400 px-4 text-xs font-bold text-slate-950 hover:bg-amber-300 whitespace-nowrap cursor-pointer"
+                >
+                  <Cloud className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Guardar en la Nube con Google</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* 4 Unlocked Illustrated Skill Crests */}
           <div>

@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { User as FirebaseUser } from 'firebase/auth';
 import {
   Calendar,
+  CheckCircle2,
+  Cloud,
   FileSpreadsheet,
   Gamepad2,
   Play,
@@ -18,6 +21,9 @@ interface StartScreenProps {
   initialPlayerName: string;
   startDateIso: string;
   savedCount: number;
+  authUser: FirebaseUser | null;
+  isAdmin: boolean;
+  onSignInGoogle: () => void;
   onStartGame: (playerId: string, playerName: string) => void;
   onOpenRecords: () => void;
 }
@@ -27,6 +33,9 @@ export function StartScreen({
   initialPlayerName,
   startDateIso,
   savedCount,
+  authUser,
+  isAdmin,
+  onSignInGoogle,
   onStartGame,
   onOpenRecords,
 }: StartScreenProps) {
@@ -34,6 +43,13 @@ export function StartScreen({
   const [playerName, setPlayerName] = useState(initialPlayerName);
   const [error, setError] = useState('');
   const [imgError, setImgError] = useState(false);
+
+  // Auto-fill participant name from Google account when signed in and field is empty
+  useEffect(() => {
+    if (authUser?.displayName && !playerName.trim()) {
+      setPlayerName(authUser.displayName);
+    }
+  }, [authUser, playerName]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,7 +119,37 @@ export function StartScreen({
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            {/* Cloud Persistence Status Banner */}
+            {authUser ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/35 bg-emerald-950/25 px-4 py-2.5 text-xs text-emerald-100">
+                <span className="inline-flex items-center gap-2 font-medium">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                  <span>
+                    Nube conectada ({authUser.email})
+                    {isAdmin ? ' · Modo Administrador (acceso a todos los registros)' : ' · Tus resultados y fecha se guardarán permanentemente'}
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2.5 rounded-xl border border-cyan-500/35 bg-cyan-950/25 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2.5 text-xs text-cyan-100">
+                  <Cloud className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" aria-hidden="true" />
+                  <span>
+                    <strong>Conecta tu cuenta Google</strong> para guardar tus respuestas, fecha exacta y puntaje en la nube desde cualquier dispositivo.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onSignInGoogle}
+                  className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-3.5 text-xs font-bold text-slate-950 transition-colors hover:bg-cyan-300 whitespace-nowrap cursor-pointer"
+                >
+                  <Cloud className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Conectar con Google</span>
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <label
@@ -122,7 +168,7 @@ export function StartScreen({
                     if (error) setError('');
                   }}
                   placeholder="Ej. Ana Sofía Pérez"
-                  maxLength={64}
+                  maxLength={96}
                   className="h-12 w-full rounded-xl border border-slate-700 bg-[#070a17] px-4 text-sm font-medium text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
                 />
               </div>
@@ -144,7 +190,7 @@ export function StartScreen({
                     if (error) setError('');
                   }}
                   placeholder="Ej. EST-2026-01"
-                  maxLength={48}
+                  maxLength={64}
                   className="h-12 w-full rounded-xl border border-slate-700 bg-[#070a17] px-4 text-sm font-medium text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
                 />
               </div>

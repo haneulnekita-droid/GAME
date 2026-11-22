@@ -1,0 +1,229 @@
+{
+  "entities": {
+    "GameSession": {
+      "title": "GameSession",
+      "description": "Completed STRESS OFF educational game run containing participant identity, exact play date, Level 1-4 choices, XP score, and Final Boss written reflections.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique session run identifier."
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the authenticated player who created this session."
+        },
+        "playerEmail": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Verified email address of the authenticated player."
+        },
+        "playerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Participant ID code entered on the Start screen."
+        },
+        "playerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96,
+          "description": "Full name of the participant."
+        },
+        "gameDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 32,
+          "description": "Calendar day (YYYY-MM-DD) when the session was played."
+        },
+        "startedAt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 64,
+          "description": "ISO timestamp when the player started the game."
+        },
+        "finishedAt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 64,
+          "description": "ISO timestamp when the player completed the Final Boss."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp enforced by Firestore request.time."
+        },
+        "xp": {
+          "type": "number",
+          "description": "Earned XP score between 0 and 4."
+        },
+        "maxXp": {
+          "type": "number",
+          "description": "Maximum possible XP score (4)."
+        },
+        "percentage": {
+          "type": "number",
+          "description": "Accuracy percentage between 0 and 100."
+        },
+        "deviceInfo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Device category used by the player (Móvil, Tablet, Computadora)."
+        },
+        "level1Option": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2,
+          "enum": ["A", "B", "C", "D"]
+        },
+        "level1Text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "level1Correct": {
+          "type": "boolean"
+        },
+        "level2Option": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2,
+          "enum": ["A", "B", "C", "D"]
+        },
+        "level2Text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "level2Correct": {
+          "type": "boolean"
+        },
+        "level3Option": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2,
+          "enum": ["A", "B", "C", "D"]
+        },
+        "level3Text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "level3Correct": {
+          "type": "boolean"
+        },
+        "level4Option": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2,
+          "enum": ["A", "B", "C", "D"]
+        },
+        "level4Text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "level4Correct": {
+          "type": "boolean"
+        },
+        "bossPowerUp1": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "bossPowerUp2": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "bossPowerUp3Plan": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "bossBonusReflection": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "unlockedSkills": {
+          "type": "array",
+          "description": "Up to 4 unlocked stress-management skill names."
+        }
+      },
+      "required": [
+        "id",
+        "ownerUid",
+        "playerEmail",
+        "playerId",
+        "playerName",
+        "gameDate",
+        "startedAt",
+        "finishedAt",
+        "createdAt",
+        "xp",
+        "maxXp",
+        "percentage",
+        "deviceInfo",
+        "level1Option",
+        "level1Text",
+        "level1Correct",
+        "level2Option",
+        "level2Text",
+        "level2Correct",
+        "level3Option",
+        "level3Text",
+        "level3Correct",
+        "level4Option",
+        "level4Text",
+        "level4Correct",
+        "bossPowerUp1",
+        "bossPowerUp2",
+        "bossPowerUp3Plan",
+        "bossBonusReflection",
+        "unlockedSkills"
+      ]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Educator/facilitator admin marker document allowing read/export of all participant game sessions.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/game_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/GameSession" },
+      "description": "Immutable completed game records created by authenticated players, readable by the session owner or the educator admin for multi-device Excel reporting."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Admin directory used by security rules to authorize educator access across all player records."
+    }
+  }
+}
