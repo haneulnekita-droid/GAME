@@ -120,33 +120,35 @@ export function StartScreen({
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            {/* Cloud Persistence Status Banner */}
-            {authUser ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/35 bg-emerald-950/25 px-4 py-2.5 text-xs text-emerald-100">
+            {/* Central Multi-Device Database Banner */}
+            {authUser && isAdmin ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-2.5 text-xs text-emerald-100">
                 <span className="inline-flex items-center gap-2 font-medium">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
                   <span>
-                    Nube conectada ({authUser.email})
-                    {isAdmin ? ' · Modo Administrador (acceso a todos los registros)' : ' · Tus resultados y fecha se guardarán permanentemente'}
+                    Modo Docente Activo ({authUser.email}) · Acceso total al historial y Excel consolidado de todos los dispositivos.
                   </span>
                 </span>
               </div>
             ) : (
-              <div className="flex flex-col gap-2.5 rounded-xl border border-cyan-500/35 bg-cyan-950/25 p-3.5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-2.5 text-xs text-cyan-100">
-                  <Cloud className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" aria-hidden="true" />
+              <div className="flex flex-col gap-2.5 rounded-xl border border-emerald-500/35 bg-emerald-950/20 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2.5 text-xs text-emerald-100">
+                  <Cloud className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
                   <span>
-                    <strong>Conecta tu cuenta Google</strong> para guardar tus respuestas, fecha exacta y puntaje en la nube desde cualquier dispositivo.
+                    <strong>Registro Automático en Línea:</strong> no necesitas cuenta Google para jugar. Al finalizar, tu nombre, puntaje, día y plan del Final Boss se envían directo a la base de datos central.
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={onSignInGoogle}
-                  className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-3.5 text-xs font-bold text-slate-950 transition-colors hover:bg-cyan-300 whitespace-nowrap cursor-pointer"
-                >
-                  <Cloud className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Conectar con Google</span>
-                </button>
+                {!authUser && (
+                  <button
+                    type="button"
+                    onClick={onSignInGoogle}
+                    title="Solo para docente/administrador que descarga el Excel general"
+                    className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-950/50 px-3 text-xs font-semibold text-cyan-200 transition-colors hover:border-cyan-300 hover:bg-cyan-900/60 whitespace-nowrap cursor-pointer"
+                  >
+                    <Shield className="h-3.5 w-3.5 text-cyan-300" aria-hidden="true" />
+                    <span>Acceso Docente</span>
+                  </button>
+                )}
               </div>
             )}
 

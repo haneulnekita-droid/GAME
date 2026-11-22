@@ -12,10 +12,10 @@ export interface SecurityTestCase {
 
 export const DIRTY_DOZEN_CASES: SecurityTestCase[] = [
   {
-    name: '1. Unauthenticated create',
-    payload: { auth: null, sessionId: 'run_1' },
+    name: '1. Unauthenticated read/list of submissions',
+    payload: { auth: null, operation: 'list', sessionId: 'run_1' },
     expectedResult: 'PERMISSION_DENIED',
-    violatedPillar: 'Master Auth Gate',
+    violatedPillar: 'PII Isolation & Admin-Only Read Gate',
   },
   {
     name: '2. Unverified admin email spoof',

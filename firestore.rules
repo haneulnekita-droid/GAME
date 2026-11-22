@@ -39,10 +39,22 @@ service cloud.firestore {
       return val is string && val.size() >= 1 && val.size() <= 2 && val in ['A', 'B', 'C', 'D'];
     }
 
+    function isValidSkillItem(item) {
+      return item is string && item.size() >= 1 && item.size() <= 64;
+    }
+
     function isValidSkillsList(skills) {
       return skills is list &&
         skills.size() <= 4 &&
-        (skills.size() == 0 || (skills[0] is string && skills[0].size() >= 1 && skills[0].size() <= 64));
+        (skills.size() < 1 || isValidSkillItem(skills[0])) &&
+        (skills.size() < 2 || isValidSkillItem(skills[1])) &&
+        (skills.size() < 3 || isValidSkillItem(skills[2])) &&
+        (skills.size() < 4 || isValidSkillItem(skills[3]));
+    }
+
+    function isValidOwnerIdentity(data) {
+      return (isVerified() && data.ownerUid == request.auth.uid) ||
+        (data.ownerUid == 'public_player' && data.playerEmail == 'registro-directo');
     }
 
     function isValidGameSession(data, sessionId) {
@@ -71,7 +83,7 @@ service cloud.firestore {
         isValidId(data.id) &&
         data.id == sessionId &&
         isValidId(data.ownerUid) &&
-        data.ownerUid == request.auth.uid &&
+        isValidOwnerIdentity(data) &&
         data.playerEmail is string && data.playerEmail.size() >= 1 && data.playerEmail.size() <= 160 &&
         data.playerId is string && data.playerId.size() >= 1 && data.playerId.size() <= 64 &&
         data.playerName is string && data.playerName.size() >= 1 && data.playerName.size() <= 96 &&
@@ -103,19 +115,20 @@ service cloud.firestore {
     }
 
     match /game_sessions/{sessionId} {
+      // Only the verified admin (or an authenticated owner of their own non-public doc) can read
       allow get: if isVerified() && isValidId(sessionId) && (
-        isAdmin() || existing().ownerUid == request.auth.uid
+        isAdmin() || (existing().ownerUid != 'public_player' && existing().ownerUid == request.auth.uid)
       );
 
       allow list: if isVerified() && (
-        isAdmin() || resource.data.ownerUid == request.auth.uid
+        isAdmin() || (resource.data.ownerUid != 'public_player' && resource.data.ownerUid == request.auth.uid)
       );
 
-      allow create: if isVerified() &&
-        isValidId(sessionId) &&
+      // Google-Forms style drop-box: any player on any device can submit one valid immutable session
+      allow create: if isValidId(sessionId) &&
         isValidGameSession(incoming(), sessionId);
 
-      // Completed sessions are immutable so scores and timestamps cannot be tampered with
+      // Immutable once submitted
       allow update: if false;
 
       allow delete: if isAdmin() && isValidId(sessionId);

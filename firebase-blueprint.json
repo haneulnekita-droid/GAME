@@ -17,13 +17,13 @@
           "minLength": 1,
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$",
-          "description": "Firebase Auth UID of the authenticated player who created this session."
+          "description": "Firebase Auth UID of the authenticated player, or 'public_player' for direct form-style multi-device submissions."
         },
         "playerEmail": {
           "type": "string",
           "minLength": 1,
           "maxLength": 160,
-          "description": "Verified email address of the authenticated player."
+          "description": "Verified email address of the authenticated player, or 'registro-directo' for form-style submissions."
         },
         "playerId": {
           "type": "string",

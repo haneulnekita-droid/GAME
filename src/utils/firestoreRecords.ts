@@ -150,12 +150,8 @@ function mapDocToRecord(data: FirestoreGameSessionDoc): PlayerSessionRecord {
 
 export async function saveGameSessionToFirestore(
   record: PlayerSessionRecord,
-  user: User
+  user: User | null
 ): Promise<PlayerSessionRecord> {
-  if (!user || !user.emailVerified) {
-    throw new Error('Se requiere una cuenta Google verificada para guardar en la nube.');
-  }
-
   const sessionId = sanitizeId(record.id);
   const docPath = `${COLLECTION_NAME}/${sessionId}`;
 
@@ -167,10 +163,18 @@ export async function saveGameSessionToFirestore(
   const gameDate = clampText(record.gameDate || getLocalDayString(record.startedAt), 32);
   const deviceInfo = clampText(record.deviceInfo || detectDeviceType(), 120);
 
+  const hasVerifiedUser = Boolean(user && user.emailVerified);
+  const ownerUid =
+    hasVerifiedUser && user ? sanitizeId(user.uid) : 'public_player';
+  const playerEmail =
+    hasVerifiedUser && user
+      ? clampText(user.email || 'verificado', 160)
+      : 'registro-directo';
+
   const payload = {
     id: sessionId,
-    ownerUid: sanitizeId(user.uid),
-    playerEmail: clampText(user.email || 'verificado', 160),
+    ownerUid,
+    playerEmail,
     playerId: clampText(record.playerId, 64),
     playerName: clampText(record.playerName || record.playerId, 96),
     gameDate,
@@ -198,6 +202,8 @@ export async function saveGameSessionToFirestore(
     bossPowerUp3Plan: clampText(record.bossPlan.powerUp3Plan, 4000),
     bossBonusReflection: clampText(record.bossPlan.bonusRoundReflection, 4000),
     unlockedSkills: (record.unlockedSkills || [])
+      .map((s) => s.trim())
+      .filter(Boolean)
       .slice(0, 4)
       .map((s) => clampText(s, 64)),
   };

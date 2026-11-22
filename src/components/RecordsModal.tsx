@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { ADMIN_EMAIL } from '../firebase';
 import { PlayerSessionRecord } from '../types/game';
 import {
   exportRecordsToCSV,
@@ -92,9 +93,9 @@ export function RecordsModal({
               <p className="text-xs text-slate-400">
                 {authUser
                   ? isAdmin
-                    ? `Administrador (${authUser.email}): viendo todos los jugadores de todos los dispositivos y días.`
-                    : `Conectado (${authUser.email}): viendo tus partidas guardadas en la nube.`
-                  : 'Conecta tu cuenta Google para sincronizar todos los registros permanentes en la nube.'}
+                    ? `Administrador (${authUser.email}): viendo todas las respuestas enviadas desde cualquier dispositivo y fecha.`
+                    : `Conectado (${authUser.email}): solo el correo administrador (${ADMIN_EMAIL}) puede consultar las respuestas de todos los dispositivos.`
+                  : 'Viendo el historial guardado en este dispositivo. Las respuestas nuevas también se envían automáticamente a la nube.'}
               </p>
             </div>
           </div>
@@ -109,20 +110,22 @@ export function RecordsModal({
           </button>
         </div>
 
-        {/* Cloud Connection Alert when signed out */}
-        {!authUser && (
+        {/* Admin Cloud Access Banner when not signed in as Admin */}
+        {!isAdmin && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/30 bg-cyan-950/30 px-6 py-3 text-xs text-cyan-100">
             <span className="inline-flex items-center gap-2">
-              <Cloud className="h-4 w-4 text-cyan-300" aria-hidden="true" />
-              Inicia sesión con Google para guardar y consultar registros permanentes entre múltiples dispositivos y fechas.
+              <Cloud className="h-4 w-4 shrink-0 text-cyan-300" aria-hidden="true" />
+              <span>
+                <strong>Acceso Docente ({ADMIN_EMAIL}):</strong> inicia sesión con Google para ver y descargar en un solo Excel (.xlsx) las respuestas de todos los jugadores y dispositivos.
+              </span>
             </span>
             <button
               type="button"
               onClick={onSignInGoogle}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-cyan-400 px-3 text-xs font-bold text-slate-950 hover:bg-cyan-300 cursor-pointer"
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-cyan-400 px-3 text-xs font-bold text-slate-950 hover:bg-cyan-300 cursor-pointer"
             >
               <Cloud className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Conectar Google</span>
+              <span>{authUser ? 'Cambiar a Cuenta Docente' : 'Acceso Docente (Google)'}</span>
             </button>
           </div>
         )}

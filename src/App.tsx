@@ -142,9 +142,8 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Upload any unsynced local records once the user signs in with a verified Google account
-  const flushLocalUnsyncedToCloud = useCallback(async (user: User) => {
-    if (!user.emailVerified) return;
+  // Upload any unsynced local records to the central Firestore drop-box (works with or without login)
+  const flushLocalUnsyncedToCloud = useCallback(async (user: User | null) => {
     const pending = loadLocalRecords().filter((r) => !r.syncedToCloud);
     if (pending.length === 0) return;
 
@@ -164,14 +163,16 @@ export default function App() {
     setLocalRecords(updatedLocal);
   }, []);
 
-  // Attach Firestore real-time subscription ONLY when auth is ready and user is authenticated
+  // Retry any unsynced local records once auth initializes, and attach live listener for verified admin/users
   useEffect(() => {
-    if (!authReady || !authUser || !authUser.emailVerified) {
+    if (!authReady) return;
+
+    flushLocalUnsyncedToCloud(authUser);
+
+    if (!authUser || !authUser.emailVerified) {
       setCloudRecords([]);
       return;
     }
-
-    flushLocalUnsyncedToCloud(authUser);
 
     const unsub = subscribeGameSessions(
       authUser,
@@ -228,9 +229,7 @@ export default function App() {
 
   const handleRefreshRecords = useCallback(async () => {
     setIsRefreshingRecords(true);
-    if (authUser) {
-      await flushLocalUnsyncedToCloud(authUser);
-    }
+    await flushLocalUnsyncedToCloud(authUser);
     setTimeout(() => setIsRefreshingRecords(false), 350);
   }, [authUser, flushLocalUnsyncedToCloud]);
 
@@ -358,15 +357,11 @@ export default function App() {
       unlockedSkills: gameState.unlockedSkills,
     };
 
-    // Persist to Firestore permanently if signed in with verified Google account
-    if (authUser && authUser.emailVerified) {
-      try {
-        completedRecord = await saveGameSessionToFirestore(completedRecord, authUser);
-      } catch (err) {
-        setAuthBannerError(
-          err instanceof Error ? err.message : 'Error al guardar en la nube.'
-        );
-      }
+    // Persist directly to central Firestore database across all devices (Google-Forms style)
+    try {
+      completedRecord = await saveGameSessionToFirestore(completedRecord, authUser);
+    } catch {
+      // Kept with syncedToCloud: false in localRecords so it retries automatically
     }
 
     // Save local backup immediately
@@ -545,8 +540,7 @@ export default function App() {
               <GameOverScreen
                 record={completedSessionRecord}
                 allRecords={records}
-                authUser={authUser}
-                onSyncNowWithGoogle={handleSignInGoogle}
+                onSyncRetry={handleRefreshRecords}
                 onBackToHome={handleReturnToHome}
                 onOpenRecords={handleOpenRecords}
               />

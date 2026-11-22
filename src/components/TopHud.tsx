@@ -143,7 +143,7 @@ export function TopHud({
           <div className="hidden lg:flex items-center gap-4 text-sm text-slate-300">
             <span className="whitespace-nowrap">Aventura Interactiva de Bienestar</span>
             <span aria-hidden="true" className="text-slate-600">·</span>
-            <span className="whitespace-nowrap text-cyan-300">Guardado Permanente en la Nube</span>
+            <span className="whitespace-nowrap text-emerald-300">Envío Automático Multi-Dispositivo</span>
           </div>
         )}
 
@@ -158,7 +158,7 @@ export function TopHud({
             >
               <Cloud className="h-4 w-4 text-emerald-400" aria-hidden="true" />
               <span className="hidden sm:inline max-w-[110px] truncate">
-                {isAdmin ? 'Admin' : authUser.displayName?.split(' ')[0] || 'Conectado'}
+                {isAdmin ? 'Admin Excel' : authUser.displayName?.split(' ')[0] || 'Conectado'}
               </span>
               <LogOut className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
             </button>
@@ -166,10 +166,11 @@ export function TopHud({
             <button
               type="button"
               onClick={onSignInGoogle}
+              title="Acceso exclusivo para docente/administrador (Excel consolidado)"
               className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/40 px-3 text-xs font-semibold text-cyan-200 transition-colors hover:border-cyan-400 hover:bg-cyan-900/50 whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Cloud className="h-4 w-4 text-cyan-300" aria-hidden="true" />
-              <span>Conectar Google</span>
+              <span>Acceso Docente</span>
             </button>
           )}
 

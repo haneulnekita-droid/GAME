@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { User } from 'firebase/auth';
 import confetti from 'canvas-confetti';
 import {
   CheckCircle2,
@@ -9,6 +8,7 @@ import {
   FileSpreadsheet,
   Home,
   Printer,
+  RefreshCw,
   Star,
   Trophy,
   XCircle,
@@ -25,8 +25,7 @@ import {
 interface GameOverScreenProps {
   record: PlayerSessionRecord;
   allRecords: PlayerSessionRecord[];
-  authUser: User | null;
-  onSyncNowWithGoogle: () => void;
+  onSyncRetry: () => void;
   onBackToHome: () => void;
   onOpenRecords: () => void;
 }
@@ -41,8 +40,7 @@ function getArcadeRank(xp: number): { rank: string; label: string } {
 export function GameOverScreen({
   record,
   allRecords,
-  authUser,
-  onSyncNowWithGoogle,
+  onSyncRetry,
   onBackToHome,
   onOpenRecords,
 }: GameOverScreenProps) {
@@ -166,30 +164,26 @@ export function GameOverScreen({
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-3 text-xs sm:text-sm text-emerald-100">
               <span className="inline-flex items-center gap-2 font-medium">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
-                Guardado permanentemente en la nube (Firebase Firestore) con fecha {record.gameDate || formatReadableDate(record.finishedAt)} y respaldo local.
+                ¡Respuestas enviadas a la base de datos central! Tu puntaje ({record.xp}/{record.maxXp} XP), fecha ({record.gameDate || formatReadableDate(record.finishedAt)}) y respuestas del Final Boss quedaron guardadas para el reporte Excel general.
               </span>
               <span className="font-mono-tabular text-emerald-300">
-                Registros visibles: {allRecords.length}
+                Dispositivo: {record.deviceInfo || 'Web'}
               </span>
             </div>
           ) : (
             <div className="flex flex-col gap-3 rounded-xl border border-amber-400/45 bg-amber-950/30 px-4 py-3.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:text-sm text-amber-100">
               <span className="inline-flex items-center gap-2 font-medium">
                 <Cloud className="h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
-                {authUser
-                  ? 'Sincronizando registro con la nube...'
-                  : 'Tu partida está guardada en este dispositivo. Conecta tu cuenta Google para guardarla permanentemente en la base de datos de la nube.'}
+                Partida guardada en este dispositivo. Pulsa reintentar si deseas enviarla ahora a la base de datos central.
               </span>
-              {!authUser && (
-                <button
-                  type="button"
-                  onClick={onSyncNowWithGoogle}
-                  className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-400 px-4 text-xs font-bold text-slate-950 hover:bg-amber-300 whitespace-nowrap cursor-pointer"
-                >
-                  <Cloud className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Guardar en la Nube con Google</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={onSyncRetry}
+                className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-400 px-4 text-xs font-bold text-slate-950 hover:bg-amber-300 whitespace-nowrap cursor-pointer"
+              >
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Reintentar Envío</span>
+              </button>
             </div>
           )}
 
