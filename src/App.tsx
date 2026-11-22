@@ -28,6 +28,7 @@ import { BossScreen } from './components/BossScreen';
 import { GameOverScreen } from './components/GameOverScreen';
 import { RecordsModal } from './components/RecordsModal';
 import { ConfirmResetModal } from './components/ConfirmResetModal';
+import { AuthErrorDetails, AuthHelpModal } from './components/AuthHelpModal';
 
 const ACTIVE_SESSION_KEY = 'stress_off_active_session_v1';
 const SAVED_RECORDS_KEY = 'stress_off_saved_records_v1';
@@ -105,7 +106,9 @@ export default function App() {
 
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [authBannerError, setAuthBannerError] = useState('');
+  const [authModalError, setAuthModalError] = useState<AuthErrorDetails | null>(null);
 
   const [cloudRecords, setCloudRecords] = useState<PlayerSessionRecord[]>([]);
   const [localRecords, setLocalRecords] = useState<PlayerSessionRecord[]>(() =>
@@ -206,21 +209,71 @@ export default function App() {
   }, []);
 
   const handleSignInGoogle = useCallback(async () => {
+    if (isSigningIn) return;
     arcadeSound.playClick();
     setAuthBannerError('');
+    setAuthModalError(null);
+    setIsSigningIn(true);
+
     try {
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
         await flushLocalUnsyncedToCloud(result.user);
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'No se pudo iniciar sesión con Google.';
-      if (!message.includes('popup-closed-by-user')) {
-        setAuthBannerError('No se pudo conectar con Google. Revisa si el navegador bloqueó la ventana emergente.');
+      const firebaseErr = err as { code?: string; message?: string };
+      const code = firebaseErr?.code || '';
+      const rawMessage = firebaseErr?.message || '';
+      const isInIframe =
+        typeof window !== 'undefined' && window.self !== window.top;
+      const currentUrl =
+        typeof window !== 'undefined' ? window.location.href : '';
+      const hostname =
+        typeof window !== 'undefined' ? window.location.hostname : '';
+
+      let title = 'No se pudo completar el Acceso Docente';
+      let description =
+        'Ocurrió un problema al abrir la ventana de Google. Puedes reintentar o abrir la aplicación en una pestaña nueva.';
+
+      if (code === 'auth/popup-closed-by-user' || rawMessage.includes('popup-closed-by-user')) {
+        title = 'La ventana de Google se cerró antes de acceder';
+        description = isInIframe
+          ? 'El navegador cerró la ventana emergente de Google mientras la aplicación estaba dentro de la vista previa. Ábrela en una pestaña nueva para iniciar sesión correctamente.'
+          : 'La ventana emergente de Google se cerró antes de terminar el inicio de sesión. Verifica que no tengas bloqueadores de cookies de terceros activos e intenta de nuevo.';
+      } else if (code === 'auth/popup-blocked' || rawMessage.includes('popup-blocked')) {
+        title = 'El navegador bloqueó la ventana emergente';
+        description =
+          'Permite las ventanas emergentes para este sitio o abre la aplicación en una pestaña nueva e intenta nuevamente.';
+      } else if (code === 'auth/cancelled-popup-request') {
+        title = 'Solicitud de acceso interrumpida';
+        description =
+          'Se detectó un intento anterior abierto. Espera un segundo y vuelve a pulsar Reintentar.';
+      } else if (code === 'auth/unauthorized-domain') {
+        title = 'Dominio aún no autorizado en Firebase Auth';
+        description =
+          'Firebase rechazó el inicio de sesión porque este dominio todavía no figura en la lista de dominios autorizados del proyecto.';
+      } else if (code === 'auth/operation-not-allowed') {
+        title = 'Acceso con Google desactivado';
+        description =
+          'El inicio de sesión con Google necesita estar habilitado en la configuración de Firebase Authentication.';
+      } else if (code === 'auth/network-request-failed') {
+        title = 'Sin conexión con el servidor de Google';
+        description =
+          'Verifica tu conexión a internet e intenta nuevamente.';
       }
+
+      setAuthModalError({
+        code: code || 'auth/error',
+        title,
+        description,
+        isInIframe,
+        currentUrl,
+        hostname,
+      });
+    } finally {
+      setIsSigningIn(false);
     }
-  }, [flushLocalUnsyncedToCloud]);
+  }, [flushLocalUnsyncedToCloud, isSigningIn]);
 
   const handleSignOut = useCallback(async () => {
     arcadeSound.playClick();
@@ -465,6 +518,7 @@ export default function App() {
         savedCount={records.length}
         authUser={authUser}
         isAdmin={isAdmin}
+        isSigningIn={isSigningIn}
         onSignInGoogle={handleSignInGoogle}
         onSignOut={handleSignOut}
         onToggleMute={handleToggleMute}
@@ -507,6 +561,7 @@ export default function App() {
                 savedCount={records.length}
                 authUser={authUser}
                 isAdmin={isAdmin}
+                isSigningIn={isSigningIn}
                 onSignInGoogle={handleSignInGoogle}
                 onStartGame={handleStartGame}
                 onOpenRecords={handleOpenRecords}
@@ -555,6 +610,7 @@ export default function App() {
         authUser={authUser}
         isAdmin={isAdmin}
         isRefreshing={isRefreshingRecords}
+        isSigningIn={isSigningIn}
         onSignInGoogle={handleSignInGoogle}
         onRefresh={handleRefreshRecords}
         onClose={() => setIsRecordsOpen(false)}
@@ -565,6 +621,13 @@ export default function App() {
         isOpen={isResetModalOpen}
         onCancel={() => setIsResetModalOpen(false)}
         onConfirm={handleConfirmReset}
+      />
+
+      <AuthHelpModal
+        error={authModalError}
+        isSigningIn={isSigningIn}
+        onRetry={handleSignInGoogle}
+        onClose={() => setAuthModalError(null)}
       />
     </div>
   );

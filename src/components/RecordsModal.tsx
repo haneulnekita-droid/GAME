@@ -28,6 +28,7 @@ interface RecordsModalProps {
   authUser: User | null;
   isAdmin: boolean;
   isRefreshing: boolean;
+  isSigningIn?: boolean;
   onSignInGoogle: () => void;
   onRefresh: () => void;
   onClose: () => void;
@@ -40,6 +41,7 @@ export function RecordsModal({
   authUser,
   isAdmin,
   isRefreshing,
+  isSigningIn = false,
   onSignInGoogle,
   onRefresh,
   onClose,
@@ -122,10 +124,17 @@ export function RecordsModal({
             <button
               type="button"
               onClick={onSignInGoogle}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-cyan-400 px-3 text-xs font-bold text-slate-950 hover:bg-cyan-300 cursor-pointer"
+              disabled={isSigningIn}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-cyan-400 px-3 text-xs font-bold text-slate-950 hover:bg-cyan-300 disabled:opacity-60 cursor-pointer"
             >
               <Cloud className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{authUser ? 'Cambiar a Cuenta Docente' : 'Acceso Docente (Google)'}</span>
+              <span>
+                {isSigningIn
+                  ? 'Abriendo Google...'
+                  : authUser
+                    ? 'Cambiar a Cuenta Docente'
+                    : 'Acceso Docente (Google)'}
+              </span>
             </button>
           </div>
         )}

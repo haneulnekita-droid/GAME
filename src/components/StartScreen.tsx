@@ -23,6 +23,7 @@ interface StartScreenProps {
   savedCount: number;
   authUser: FirebaseUser | null;
   isAdmin: boolean;
+  isSigningIn?: boolean;
   onSignInGoogle: () => void;
   onStartGame: (playerId: string, playerName: string) => void;
   onOpenRecords: () => void;
@@ -35,6 +36,7 @@ export function StartScreen({
   savedCount,
   authUser,
   isAdmin,
+  isSigningIn = false,
   onSignInGoogle,
   onStartGame,
   onOpenRecords,
@@ -142,11 +144,12 @@ export function StartScreen({
                   <button
                     type="button"
                     onClick={onSignInGoogle}
+                    disabled={isSigningIn}
                     title="Solo para docente/administrador que descarga el Excel general"
-                    className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-950/50 px-3 text-xs font-semibold text-cyan-200 transition-colors hover:border-cyan-300 hover:bg-cyan-900/60 whitespace-nowrap cursor-pointer"
+                    className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-950/50 px-3 text-xs font-semibold text-cyan-200 transition-colors hover:border-cyan-300 hover:bg-cyan-900/60 disabled:opacity-60 whitespace-nowrap cursor-pointer"
                   >
                     <Shield className="h-3.5 w-3.5 text-cyan-300" aria-hidden="true" />
-                    <span>Acceso Docente</span>
+                    <span>{isSigningIn ? 'Abriendo Google...' : 'Acceso Docente'}</span>
                   </button>
                 )}
               </div>

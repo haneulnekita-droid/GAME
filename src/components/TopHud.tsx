@@ -22,6 +22,7 @@ interface TopHudProps {
   savedCount: number;
   authUser: User | null;
   isAdmin: boolean;
+  isSigningIn?: boolean;
   onSignInGoogle: () => void;
   onSignOut: () => void;
   onToggleMute: () => void;
@@ -39,6 +40,7 @@ export function TopHud({
   savedCount,
   authUser,
   isAdmin,
+  isSigningIn = false,
   onSignInGoogle,
   onSignOut,
   onToggleMute,
@@ -166,11 +168,12 @@ export function TopHud({
             <button
               type="button"
               onClick={onSignInGoogle}
+              disabled={isSigningIn}
               title="Acceso exclusivo para docente/administrador (Excel consolidado)"
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/40 px-3 text-xs font-semibold text-cyan-200 transition-colors hover:border-cyan-400 hover:bg-cyan-900/50 whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/40 px-3 text-xs font-semibold text-cyan-200 transition-colors hover:border-cyan-400 hover:bg-cyan-900/50 disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <Cloud className="h-4 w-4 text-cyan-300" aria-hidden="true" />
-              <span>Acceso Docente</span>
+              <Cloud className={`h-4 w-4 text-cyan-300 ${isSigningIn ? 'animate-pulse' : ''}`} aria-hidden="true" />
+              <span>{isSigningIn ? 'Abriendo...' : 'Acceso Docente'}</span>
             </button>
           )}
 
